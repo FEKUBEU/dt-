@@ -1,0 +1,192 @@
+library IEEE;
+	use IEEE.std_logic_1164.all;
+
+	
+	entity labor32 is
+	port(P_Daten			: in std_logic_vector(4 downto 0);		--paralle daten
+		  Daten_R,Daten_L	: in std_logic;								--serielle dasten
+		  EN					: in std_logic;
+		  Select1,Select0	: in std_logic;								--steuereingänge 00=s1,01=s2,10=s3,11=s4	
+		  clk_schiebe		: in std_logic;								--clock
+		  clk_ff				: out std_logic;								--clock
+		  Out_R,Out_L		: out std_logic;								--serielle ausgänge
+		  test 				: out std_logic;
+		  P_Out				: out std_logic_vector(4 downto 0)	);	--paralle ausgänge
+	end labor32;
+	
+	architecture a_labor32 of labor32 is
+	
+	component d_ff 
+	port(		D	 : in std_logic;
+				CLK : in std_logic;
+				Q	 : out std_logic	);	
+	end component;
+	
+	type Zustaende is (s1,s2,s3,s4);						-- s1 = not enabled s2 = seriell laden links s3 = seriell laden rechts s4 = parall laden2
+	signal Zustand,Folgezustand : Zustaende; 
+	
+	signal D 	: std_logic_vector(4 downto 0):="00000";
+	signal clk 	: std_logic_vector(4 downto 0);
+	signal Q 	: std_logic_vector(4 downto 0):="00000";
+	
+	
+	begin 
+	
+	ffGenerate : for i IN 0 to 4 generate
+		
+		ff0 : d_ff
+		port map	(	D 		=> D(i),
+						CLK 	=> CLK(i),
+						Q		=> Q(i)		);
+	
+	end generate;
+	
+	clk(0) <= clk_schiebe;
+	clk_ff <= clk(0);
+	clk(1) <= clk_schiebe;
+	clk(2) <= clk_schiebe;
+	clk(3) <= clk_schiebe;
+	clk(4) <= clk_schiebe;
+	P_out <= Q;
+	-----------------------------------------
+	zustandsspeicher : process(clk_schiebe,EN)
+		
+		begin
+		
+		if(EN = '1')THEN
+		Zustand <= s1;
+		
+		elsif(clk_schiebe'event and clk_schiebe='1')then
+		Zustand <= Folgezustand;
+		end if;
+		
+	end process zustandsspeicher;
+	-------------------------------------------
+	uebergang : process(Zustand,select1,select0)	
+		
+		begin
+		
+		case select0 is
+			
+			when '0' 	=> 	if		(select1 = '0')THEN
+									folgezustand <= s1;
+									elsif	(select1 = '1')THEN
+									folgezustand <= s3;
+									end if;
+								
+			when '1' 	=> 	if		(select1 = '0')THEN
+									folgezustand <= s2;
+									elsif	(select1 = '1')THEN
+									folgezustand <= s4;
+									end if;
+				
+			when others =>		folgezustand <= s1;
+		
+		end case;
+		
+	end process uebergang;
+	-------------------------------------------
+	ausgang : process(clk_schiebe)
+		
+		begin
+		
+		
+		
+		if(clk_schiebe='1' )then
+		
+		
+		
+		case Zustand is
+			
+			when s1 =>	
+			when s2 =>	Out_L	<=	Q(0);	--s2 = seriell laden links
+							D(0)	<=	Q(1);
+							D(1)	<=	Q(2);
+							D(2)	<=	Q(3);
+							D(3)	<=	Q(4);
+							D(4)	<=	Daten_R;
+							
+							
+			when s3 =>	D(0)	<=	Daten_L; --s3 = seriell laden rechts
+							D(1)	<=	Q(0);
+							D(2)	<=	Q(1);
+							D(3)	<=	Q(2);
+							D(4)	<=	Q(3);
+							Out_R	<=	Q(4);
+							test	<= '1';
+			
+			when s4 =>	D <= P_daten;
+		
+		end case;
+	end if;
+	end process ausgang;
+	-------------------------------------------
+	
+	end a_labor32;
+
+--------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
+-------TESTBENCH
+library IEEE;
+	use IEEE.std_logic_1164.all;
+
+
+entity tb_schiebe is
+end tb_schiebe;
+
+architecture a_tb_schiebe of tb_schiebe is 
+	component labor32
+	port(P_Daten			: in std_logic_vector(4 downto 0);		--paralle daten
+		  Daten_R,Daten_L	: in std_logic;								--serielle dasten
+		  EN					: in std_logic;
+		  Select1,Select0	: in std_logic;								--steuereingänge 00=s1,01=s2,10=s3,11=s4	
+		  clk_schiebe		: in std_logic;								--clock
+		  test 				: out std_logic;
+		  clk_ff				: out std_logic;								--clock
+		  Out_R,Out_L		: out std_logic;								--serielle ausgänge
+		  P_Out				: out std_logic_vector(4 downto 0)	);	--paralle ausgänge
+	end component;
+	
+	signal P_Daten				:  std_logic_vector(4 downto 0);		
+	signal Daten_L				:  std_logic:='0';	
+	signal Daten_R				:  std_logic:='0';	
+	signal Select0				: 	std_logic:='0';
+	signal Select1				: 	std_logic:='0';
+	signal clk_schiebe		: 	std_logic:='0';
+	signal clk_ff				: 	std_logic;
+	signal test					: 	std_logic:='0';
+	signal EN					: 	std_logic:='0';
+	signal Out_R,Out_L		:  std_logic; 
+	signal p_Out				:  std_logic_vector(4 downto 0);
+		
+		begin
+		
+		dut : labor32
+		port map ( P_Out			=>		P_out,
+					  Daten_R		=>		Daten_R,
+					  Daten_L		=>		Daten_L,
+					  Select0		=>		Select0,
+					  Select1		=>		Select1,
+					  clk_schiebe	=>		clk_schiebe,
+					  clk_ff			=>		clk_ff,
+					  Out_R			=>		Out_R,
+					  Out_L			=>		Out_L,
+					  test			=>		test,
+					  EN				=>		EN,
+					  P_Daten		=>		P_Daten		);
+					  
+				-- s1(00) = not enabled  
+				-- s2(01) = seriell laden links 
+				-- s3(10) = seriell laden rechts 
+				-- s4(11) = parall laden2
+			
+			clk_schiebe <= not clk_schiebe   after 50ns;
+			P_daten		<= "10101"				after 1600ns;
+			Daten_L		<= '1'					after 20ns;
+			Daten_R		<= '0'					after 20ns;
+			Select1		<= '1'					after 100ns, '0'					after 800ns,'1' after 1600ns;
+			select0		<= '1'					after 800ns; 
+			
+			
+			
+	end a_tb_schiebe;
